@@ -151,6 +151,7 @@ public class StateData implements Cloneable {
       } else {
         var beforeRentalStateData = proto.clone();
         beforeRentalStateData.vehicleRentalState = VehicleRentalState.BEFORE_RENTING;
+        beforeRentalStateData.currentMode = TraverseMode.WALK;
         res.add(beforeRentalStateData);
       }
     }
