@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Stream;
 import org.opentripplanner.core.model.id.FeedScopedId;
 import org.opentripplanner.framework.retry.OtpRetry;
 import org.opentripplanner.framework.retry.OtpRetryBuilder;
@@ -188,12 +189,7 @@ public class VehicleRentalUpdater extends PollingGraphUpdater<StreetRealTimeUpda
         if (vehicleRentalVertex == null) {
           vehicleRentalVertex = new VehicleRentalPlaceVertex(station);
           context.graph().addVertex(vehicleRentalVertex);
-          DisposableEdgeCollection tempEdges = linker.linkVertexForRealTime(
-            vehicleRentalVertex,
-            new TraverseModeSet(TraverseMode.WALK),
-            LinkingDirection.BIDIRECTIONAL,
-            StreetVehicleRentalLink::createBidirectionalLinks
-          );
+          DisposableEdgeCollection tempEdges = linkRentalPlace(vehicleRentalVertex, station);
           if (vehicleRentalVertex.getOutgoing().isEmpty()) {
             // Copy reference to pass into lambda
             var vrv = vehicleRentalVertex;
@@ -272,6 +268,34 @@ public class VehicleRentalUpdater extends PollingGraphUpdater<StreetRealTimeUpda
         );
       }
     }
+  }
+
+  /**
+   * Link the rental location for walking and once for each vehicle mode it serves.
+   * Rental spots are often marked on a sidewalk, which is not reachable by the mode that it rents.
+   */
+  private DisposableEdgeCollection linkRentalPlace(
+    VehicleRentalPlaceVertex vertex,
+    VehicleRentalPlace place
+  ) {
+    DisposableEdgeCollection edges = linkForMode(vertex, TraverseMode.WALK);
+    Stream.concat(
+      place.availablePickupFormFactors(false).stream(),
+      place.availableDropoffFormFactors(false).stream()
+    )
+      .map(formFactor -> formFactor.traverseMode)
+      .distinct()
+      .forEach(mode -> linkForMode(vertex, mode).listEdges().forEach(edges::addEdge));
+    return edges;
+  }
+
+  private DisposableEdgeCollection linkForMode(VehicleRentalPlaceVertex vertex, TraverseMode mode) {
+    return linker.linkVertexForRealTime(
+      vertex,
+      new TraverseModeSet(mode),
+      LinkingDirection.BIDIRECTIONAL,
+      StreetVehicleRentalLink::createBidirectionalLinks
+    );
   }
 
   /**
